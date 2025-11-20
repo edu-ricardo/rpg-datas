@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RPG Scheduler</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <!-- Auth section -->
+        <div id="auth-container">
+            <h2 id="auth-title">Login</h2>
+            <form id="auth-form">
+                <div class="form-group">
+                    <label for="username">Nome:</label>
+                    <input type="text" id="username" name="username" required>
+                </div>
+                <div class="form-group">
+                    <label for="password">Senha:</label>
+                    <input type="password" id="password" name="password" required>
+                </div>
+                <button type="submit" id="auth-button">Entrar</button>
+            </form>
+            <p id="toggle-auth">Não tem uma conta? <a href="#">Registre-se</a></p>
+        </div>
+
+        <!-- Main app content (hidden by default) -->
+        <div id="main-content" style="display: none;">
+            <header>
+                <h1>RPG Scheduler</h1>
+                <div id="user-info">
+                    <span id="user-display-name"></span>
+                    <button id="logout-button">Sair</button>
+                </div>
+                <div class="theme-selector">
+                    <label for="theme-select">Tema:</label>
+                    <select id="theme-select">
+                        <option value="system">Sistema</option>
+                        <option value="light">Claro</option>
+                        <option value="dark">Escuro</option>
+                    </select>
+                </div>
+            </header>
+            
+            <!-- Player View -->
+            <div id="player-view">
+                <h3>Sua Disponibilidade</h3>
+                <div id="calendar-container">
+                    <div id="calendar-header">
+                        <button id="prev-month-button">&lt;</button>
+                        <h4 id="month-year-header"></h4>
+                        <button id="next-month-button">&gt;</button>
+                    </div>
+                    <div id="calendar-weekdays"></div>
+                    <div id="calendar-grid"></div>
+                </div>
+            </div>
+
+            <!-- GM View -->
+            <div id="gm-view" style="display: none;">
+                <h3>Painel do Mestre</h3>
+                <div id="gm-calendar-header" class="calendar-header">
+                    <button id="gm-prev-month-button">&lt;</button>
+                    <h4 id="gm-month-year-header"></h4>
+                    <button id="gm-next-month-button">&gt;</button>
+                </div>
+                <div id="gm-dashboard"></div>
+                <button id="find-best-day-button">Encontrar Melhor Dia para este Mês</button>
+                <div id="best-day-result"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="./dist/bundle.js"></script>
+</body>
+</html>
