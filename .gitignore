@@ -6,7 +6,6 @@
 
 # IDE config files
 .idea/
-.vscode/
 
 # Log files
 npm-debug.log*

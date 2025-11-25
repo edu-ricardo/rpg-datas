@@ -243,6 +243,25 @@ button:hover {
 .status-maybe { background-color: #ffc107; }
 .status-unknown { background-color: #6c757d; }
 
+/* Sticky first column so names remain visible when scrolling horizontally */
+.gm-table th:first-child,
+.gm-table td:first-child {
+    position: sticky;
+    left: 0;
+    background-color: var(--card-bg-color);
+    z-index: 2;
+    text-align: left;
+    padding-left: 0.75em;
+}
+
+.gm-table thead th:first-child {
+    z-index: 3; /* keep header cell above body cells */
+}
+
+.gm-table th:first-child {
+    box-shadow: 2px 0 6px -2px rgba(0,0,0,0.08);
+}
+
 /* Responsive adjustments */
 @media (max-width: 600px) {
     body {

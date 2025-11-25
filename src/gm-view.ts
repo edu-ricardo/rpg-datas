@@ -7,7 +7,10 @@ import { formatDate, formatDisplayDate } from "./utils";
 const gmView = document.getElementById('gm-view');
 const gmDashboard = document.getElementById('gm-dashboard');
 const findBestDayButton = document.getElementById('find-best-day-button');
+const calcFromTodayButton = document.getElementById('calc-from-today-button');
+const calcFromMonthButton = document.getElementById('calc-from-month-button');
 const bestDayResult = document.getElementById('best-day-result');
+const playerAvailabilityResult = document.getElementById('player-availability-result');
 const gmMonthYearHeader = document.getElementById('gm-month-year-header');
 const gmPrevMonthButton = document.getElementById('gm-prev-month-button');
 const gmNextMonthButton = document.getElementById('gm-next-month-button');
@@ -139,7 +142,9 @@ async function findBestDay() {
             } else if (status === 'maybe') {
                 dayScores[formattedDate] += 1;
                 dayDetails[formattedDate].maybe++;
-            } else if (status === 'unavailable') {
+            } else if (status === 'unavailable' || status === 'unknown' || !status) {
+                dayDetails[formattedDate].unavailable++;
+            }else {
                 dayDetails[formattedDate].unavailable++;
             }
         }
@@ -148,13 +153,80 @@ async function findBestDay() {
     const sortedDays = Object.keys(dayScores).sort((a, b) => dayScores[b] - dayScores[a]);
 
     let resultHTML = '<h4>Melhores Dias Sugeridos (Este Mês):</h4><ul>';
-    sortedDays.slice(0, 5).forEach(date => { // Show top 5
+    sortedDays.slice(0, 15).forEach(date => { // Show top 5
         const displayDate = formatDisplayDate(new Date(date));
         const details = dayDetails[date];
-        resultHTML += `<li><strong>${displayDate}</strong>: ${details.available} ✅, ${details.maybe} ❓, ${details.unavailable} ❌ (Score: ${dayScores[date]})</li>`;
+        resultHTML += `<li><strong>${date}</strong>: ${details.available} ✅, ${details.maybe} ❓, ${details.unavailable} ❌ (Score: ${dayScores[date]})</li>`;
     });
     resultHTML += '</ul>';
     bestDayResult.innerHTML = resultHTML;
+}
+
+// --- Per-player availability from a given start (today or month start) ---
+async function calculateAvailabilityByPlayer(startMode: 'today' | 'month') {
+    if (!playerAvailabilityResult) return;
+    playerAvailabilityResult.innerHTML = 'Calculando...';
+
+    const year = gmCurrentDate.getFullYear();
+    const month = gmCurrentDate.getMonth();
+    const daysInCurrentMonth = getDaysInMonth(year, month);
+
+    const firstDay = daysInCurrentMonth[0];
+    const lastDay = daysInCurrentMonth[daysInCurrentMonth.length - 1];
+
+    let startDateObj = startMode === 'today' ? new Date() : new Date(firstDay);
+    // Clamp to this month
+    if (startDateObj < firstDay) startDateObj = new Date(firstDay);
+    if (startDateObj > lastDay) startDateObj = new Date(lastDay);
+
+    const consideredDays = daysInCurrentMonth.filter(d => d >= startDateObj);
+    const startDate = formatDate(consideredDays[0]);
+    const endDate = formatDate(consideredDays[consideredDays.length - 1]);
+
+    // Fetch users
+    const usersSnapshot = await getDocs(collection(db, "users"));
+    const users: { uid: string; name: string }[] = [];
+    usersSnapshot.forEach(d => users.push({ uid: d.id, ...d.data() as any }));
+
+    // Fetch availability for the considered range
+    const availabilityQuery = query(
+        collection(db, "availability"),
+        where("date", ">=", startDate),
+        where("date", "<=", endDate)
+    );
+    const availabilitySnapshot = await getDocs(availabilityQuery);
+    const allAvailability: { [userId: string]: { [date: string]: string } } = {};
+    availabilitySnapshot.forEach(d => {
+        const data = d.data();
+        if (!allAvailability[data.userId]) allAvailability[data.userId] = {};
+        allAvailability[data.userId][data.date] = data.status;
+    });
+
+    const results: { uid: string; name: string; available: number; maybe: number; totalConsidered: number }[] = [];
+
+    users.forEach(u => {
+        let avail = 0;
+        let maybe = 0;
+        consideredDays.forEach(day => {
+            const f = formatDate(day);
+            const s = allAvailability[u.uid]?.[f];
+            if (s === 'available') avail++;
+            else if (s === 'maybe') maybe++;
+        });
+        results.push({ uid: u.uid, name: u.name, available: avail, maybe, totalConsidered: consideredDays.length });
+    });
+
+    results.sort((a, b) => b.available - a.available || b.maybe - a.maybe);
+
+    let html = `<h4>Disponibilidade por Jogador (a partir de ${formatDisplayDate(new Date(startDate))})</h4>`;
+    html += `<p>Dias considerados: ${consideredDays.length}</p>`;
+    html += '<ul>';
+    results.forEach(r => {
+        html += `<li><strong>${r.name}</strong>: ${r.available} ✅, ${r.maybe} ❓ (de ${r.totalConsidered} dias)</li>`;
+    });
+    html += '</ul>';
+
+    playerAvailabilityResult.innerHTML = html;
 }
 
 export function initializeGMView() {
@@ -173,6 +245,8 @@ export function initializeGMView() {
     });
 
     findBestDayButton.addEventListener('click', findBestDay);
+    if (calcFromTodayButton) calcFromTodayButton.addEventListener('click', () => calculateAvailabilityByPlayer('today'));
+    if (calcFromMonthButton) calcFromMonthButton.addEventListener('click', () => calculateAvailabilityByPlayer('month'));
 
     // Initial render
     renderGMView();
