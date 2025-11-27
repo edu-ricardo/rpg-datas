@@ -73,6 +73,24 @@
                 </div>
                 <div id="best-day-result"></div>
                 <div id="player-availability-result" style="margin-top:0.75rem;"></div>
+
+                <!-- Tables (Mesas) management -->
+                <section id="gm-tables" style="margin-top:1rem;">
+                    <h4>Mesas</h4>
+                    <div id="tables-list">Carregando mesas...</div>
+
+                    <div id="create-table" style="margin-top:0.75rem;">
+                        <h5>Criar nova mesa</h5>
+                        <div style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+                            <input type="text" id="table-name-input" placeholder="Nome da mesa" />
+                            <button id="create-table-button">Criar Mesa</button>
+                        </div>
+                        <p style="font-size:0.9em;color:#666;margin-top:0.5rem;">Ao criar, selecione jogadores na lista de checkboxes abaixo. O mestre será adicionado automaticamente a todas as mesas.</p>
+                        <div id="table-players-checkboxes" style="margin-top:0.5rem;display:flex;flex-direction:column;max-height:200px;overflow:auto;border:1px dashed #ddd;padding:0.5rem;border-radius:4px;">
+                            Carregando jogadores...
+                        </div>
+                    </div>
+                </section>
             </div>
         </div>
     </div>

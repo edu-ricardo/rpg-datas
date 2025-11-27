@@ -198,6 +198,7 @@ button:hover {
 
 .calendar-day .day-number {
     font-weight: bold;
+    user-select: none;
 }
 
 .calendar-day.today .day-number {
@@ -207,12 +208,34 @@ button:hover {
 
 .calendar-day .status-dot {
     position: absolute;
-    bottom: 8px;
+    bottom: 25px;
     left: 50%;
     transform: translateX(-50%);
-    width: 10px;
-    height: 10px;
+    width: 15px;
+    height: 15px;
     border-radius: 50%;
+}
+
+/* container to hold dot and label centered at bottom */
+.calendar-day .status-container {
+    position: absolute;
+    bottom: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+}
+
+.calendar-day .status-label {
+    font-size: 0.76em;
+    color: var(--bg-color);
+    background: var(--text-color);
+    padding: 2px 8px;
+    border-radius: 3px;
+    line-height: 1;
+    font-weight: bold;
 }
 
 /* --- GM Dashboard & Table --- */
@@ -262,6 +285,41 @@ button:hover {
     box-shadow: 2px 0 6px -2px rgba(0,0,0,0.08);
 }
 
+/* Player mini-card used in GM tables list */
+.player-mini-card {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 0.25rem 0.5rem;
+    border-radius: 6px;
+    background-color: var(--input-bg-color);
+    border: 1px solid var(--border-color);
+    font-size: 0.9em;
+    min-width: 90px;
+}
+.player-name {
+    font-weight: 600;
+}
+.player-role-badge {
+    margin-top: 4px;
+    font-size: 0.75em;
+    padding: 0.12rem 0.4rem;
+    border-radius: 4px;
+    color: #fff;
+}
+.player-role-badge.dm {
+    background-color: var(--primary-color);
+}
+.player-role-badge.player {
+    background-color: #6c757d;
+}
+.table-players-cards {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    margin-top: 0.4rem;
+}
+
 /* Responsive adjustments */
 @media (max-width: 600px) {
     body {
@@ -277,4 +335,13 @@ button:hover {
         flex-direction: column;
         gap: 1.5rem;
     }
+}
+
+
+.danger {
+    background-color: var(--danger-color);
+}
+
+.danger:hover {
+    background-color: var(--danger-hover-color);
 }

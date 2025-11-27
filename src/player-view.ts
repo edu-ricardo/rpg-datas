@@ -25,6 +25,15 @@ const availabilityCycle: Record<AvailabilityStatus, AvailabilityStatus> = {
     'unavailable': 'unknown'
 };
 
+function getStatusLabel(status: AvailabilityStatus): string {
+    switch (status) {
+        case 'available': return 'Disponível';
+        case 'maybe': return 'Talvez';
+        case 'unavailable': return 'Indisponível';
+        default: return 'n/a';
+    }
+}
+
 // --- Firestore Data Interaction ---
 async function getMonthlyAvailability(userId: string, year: number, month: number): Promise<{[date: string]: string}> {
     const availability: {[date: string]: string} = {};
@@ -113,9 +122,21 @@ async function renderCalendar(user: User) {
         const formattedDate = formatDate(new Date(year, month, i));
         const status = (userAvailability[formattedDate] || 'unknown') as AvailabilityStatus;
 
+        // status container with dot and label
+        const statusContainer = document.createElement('div');
+        statusContainer.className = 'status-container';
+
         const statusDot = document.createElement('div');
         statusDot.className = `status-dot status-${status}`;
-        dayCell.appendChild(statusDot);
+
+        const statusLabel = document.createElement('div');
+        statusLabel.className = 'status-label';
+        const statusText = getStatusLabel(status);
+        statusLabel.textContent = statusText;
+
+        statusContainer.appendChild(statusDot);
+        statusContainer.appendChild(statusLabel);
+        dayCell.appendChild(statusContainer);
         dayCell.dataset.date = formattedDate;
 
         dayCell.addEventListener('click', async () => {
@@ -123,6 +144,7 @@ async function renderCalendar(user: User) {
             const newStatus = availabilityCycle[currentStatus];
             userAvailability[formattedDate] = newStatus; // Update local state
             statusDot.className = `status-dot status-${newStatus}`; // Update UI immediately
+            statusLabel.textContent = getStatusLabel(newStatus);
             await saveAvailability(user.uid, formattedDate, newStatus); // Save to Firestore
         });
 

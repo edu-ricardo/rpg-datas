@@ -15,6 +15,6 @@ export function formatDate(date: Date): string {
 }
 
 export function formatDisplayDate(date: Date): string {
-    const options: Intl.DateTimeFormatOptions = { weekday: 'short', month: 'short', day: 'numeric' };
+    const options: Intl.DateTimeFormatOptions = { weekday: 'long', month: 'short', day: 'numeric' };
     return date.toLocaleDateString('pt-BR', options);
 }

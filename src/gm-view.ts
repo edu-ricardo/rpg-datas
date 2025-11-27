@@ -1,6 +1,6 @@
 // src/gm-view.ts
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "./firebase";
+import { collection, getDocs, query, where, addDoc, doc, deleteDoc } from "firebase/firestore";
+import { db, auth } from "./firebase";
 import { formatDate, formatDisplayDate } from "./utils";
 
 // --- DOM Elements ---
@@ -11,6 +11,10 @@ const calcFromTodayButton = document.getElementById('calc-from-today-button');
 const calcFromMonthButton = document.getElementById('calc-from-month-button');
 const bestDayResult = document.getElementById('best-day-result');
 const playerAvailabilityResult = document.getElementById('player-availability-result');
+const tablesList = document.getElementById('tables-list');
+const createTableButton = document.getElementById('create-table-button');
+const tableNameInput = document.getElementById('table-name-input') as HTMLInputElement | null;
+const tablePlayersCheckboxes = document.getElementById('table-players-checkboxes');
 const gmMonthYearHeader = document.getElementById('gm-month-year-header');
 const gmPrevMonthButton = document.getElementById('gm-prev-month-button');
 const gmNextMonthButton = document.getElementById('gm-next-month-button');
@@ -101,6 +105,194 @@ export async function renderGMView() {
     gmDashboard.innerHTML = tableHTML;
 }
 
+// --- Tables (mesas) management ---
+async function loadTablesAndUsers() {
+    if (!tablesList || !tablePlayersCheckboxes) return;
+    tablesList.innerHTML = 'Carregando...';
+    tablePlayersCheckboxes.innerHTML = 'Carregando...';
+
+    // Fetch users
+    const usersSnapshot = await getDocs(collection(db, "users"));
+    const users: { uid: string; name: string; isGM?: boolean }[] = [];
+    usersSnapshot.forEach(d => users.push({ uid: d.id, ...d.data() as any }));
+
+    // Render checkboxes for creating table
+    tablePlayersCheckboxes.innerHTML = '';
+    users.forEach(u => {
+        const id = u.uid;
+        const label = document.createElement('label');
+        label.style.marginBottom = '4px';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.value = id;
+        cb.style.marginRight = '6px';
+        label.appendChild(cb);
+        label.appendChild(document.createTextNode(u.name));
+        tablePlayersCheckboxes.appendChild(label);
+    });
+
+    // Fetch tables
+    const tablesSnapshot = await getDocs(collection(db, "tables"));
+    const tbls: any[] = [];
+    tablesSnapshot.forEach(d => tbls.push({ id: d.id, ...d.data() }));
+
+    // Map users for quick lookup
+    const usersById: { [id: string]: string } = {};
+    users.forEach(u => usersById[u.uid] = u.name);
+
+    // Render tables list
+    if (tbls.length === 0) {
+        tablesList.innerHTML = '<p>Nenhuma mesa criada ainda.</p>';
+    } else {
+        const ul = document.createElement('div');
+        ul.style.display = 'flex';
+        ul.style.flexDirection = 'column';
+        ul.style.gap = '0.5rem';
+        tbls.forEach(t => {
+            const card = document.createElement('div');
+            card.style.padding = '0.5rem';
+            card.style.border = '1px solid #eee';
+            card.style.borderRadius = '6px';
+            card.style.display = 'flex';
+            card.style.justifyContent = 'space-between';
+            card.style.alignItems = 'center';
+            
+
+            const left = document.createElement('div');
+            // render players as mini-cards with role badges (DM or Player)
+            const playersArr: string[] = t.players || [];
+            const playersHtml = playersArr.map((p: string) => {
+                const name = usersById[p] || p;
+                const role = (p === t.masterId) ? 'DM' : 'Player';
+                const roleClass = (role === 'DM') ? 'dm' : 'player';
+                return `<div class="player-mini-card"><div class="player-name">${name}</div><div class="player-role-badge ${roleClass}">${role}</div></div>`;
+            }).join('');
+            left.innerHTML = `<strong>${t.name}</strong><div class="table-players-cards">${playersHtml}</div>`;
+
+            const right = document.createElement('div');
+            const calcBtn = document.createElement('button');
+            calcBtn.textContent = 'Calcular (por mesa)';
+            calcBtn.addEventListener('click', () => calculateForTable(t));
+            const delBtn = document.createElement('button');
+            delBtn.textContent = 'Excluir';
+            delBtn.className = 'danger';
+            delBtn.addEventListener('click', async () => {
+                if (!confirm(`Excluir mesa "${t.name}"?`)) return;
+                await deleteDoc(doc(db, 'tables', t.id));
+                loadTablesAndUsers();
+            });
+            right.appendChild(calcBtn);
+            right.appendChild(delBtn);
+
+            card.appendChild(left);
+            card.appendChild(right);
+            ul.appendChild(card);
+        });
+        tablesList.innerHTML = '';
+        tablesList.appendChild(ul);
+    }
+}
+
+async function createTable() {
+    if (!tableNameInput || !tablePlayersCheckboxes) return;
+    const name = tableNameInput.value.trim();
+    if (!name) { alert('Digite um nome para a mesa'); return; }
+    const checkboxes = Array.from(tablePlayersCheckboxes.querySelectorAll('input[type="checkbox"]')) as HTMLInputElement[];
+    const selected = checkboxes.filter(c => c.checked).map(c => c.value);
+    const masterId = auth.currentUser?.uid;
+    if (!masterId) { alert('Usuário não identificado'); return; }
+    const players = Array.from(new Set([...selected, masterId]));
+    await addDoc(collection(db, 'tables'), { name, players, masterId });
+    tableNameInput.value = '';
+    // uncheck
+    checkboxes.forEach(c => c.checked = false);
+    loadTablesAndUsers();
+}
+
+// Calculate availability for a specific table (only players in that table)
+async function calculateForTable(tableDoc: any) {
+    if (!playerAvailabilityResult) return;
+    playerAvailabilityResult.innerHTML = 'Calculando para mesa...';
+
+    const players: string[] = tableDoc.players || [];
+    if (players.length === 0) {
+        playerAvailabilityResult.innerHTML = '<p>Nenhum jogador nesta mesa.</p>';
+        return;
+    }
+
+    const year = gmCurrentDate.getFullYear();
+    const month = gmCurrentDate.getMonth();
+    const daysInCurrentMonth = getDaysInMonth(year, month);
+    const startDate = formatDate(daysInCurrentMonth[0]);
+    const endDate = formatDate(daysInCurrentMonth[daysInCurrentMonth.length - 1]);
+
+    // Fetch availability for the current month for those players
+    const availabilityQuery = query(
+        collection(db, "availability"),
+        where("date", ">=", startDate),
+        where("date", "<=", endDate)
+    );
+    const availabilitySnapshot = await getDocs(availabilityQuery);
+    const allAvailability: { [userId: string]: { [date: string]: string } } = {};
+    availabilitySnapshot.forEach(d => {
+        const data = d.data();
+        if (!players.includes(data.userId)) return; // ignore others
+        if (!allAvailability[data.userId]) allAvailability[data.userId] = {};
+        allAvailability[data.userId][data.date] = data.status;
+    });
+
+    // Compute day scores among table players
+    const dayScores: { [date: string]: number } = {};
+    const dayDetails: { [date: string]: { available: number, maybe: number, unavailable: number } } = {};
+    daysInCurrentMonth.forEach(day => {
+        const formattedDate = formatDate(day);
+        dayScores[formattedDate] = 0;
+        dayDetails[formattedDate] = { available: 0, maybe: 0, unavailable: 0 };
+        players.forEach(userId => {
+            const status = allAvailability[userId]?.[formattedDate];
+            if (status === 'available') { dayScores[formattedDate] += 2; dayDetails[formattedDate].available++; }
+            else if (status === 'maybe') { dayScores[formattedDate] += 1; dayDetails[formattedDate].maybe++; }
+            else { dayDetails[formattedDate].unavailable++; }
+        });
+    });
+
+    const sortedDays = Object.keys(dayScores).sort((a,b) => dayScores[b] - dayScores[a]);
+
+    let html = `<h4>Melhores dias para mesa "${tableDoc.name}"</h4>`;
+    html += '<ul>';
+    sortedDays.slice(0, 15).forEach(date => {
+        const d = dayDetails[date];
+        const displayDate = formatDisplayDate(new Date(date+'T00:00:00'));
+        
+        html += `<li><strong>${displayDate}</strong>: ${d.available} ✅, ${d.maybe} ❓, ${d.unavailable} ❌ (Score: ${dayScores[date]})</li>`;
+    });
+    html += '</ul>';
+
+    // Also show per-player totals inside this table for the month
+    const usersTotals: { id: string; available: number; maybe: number }[] = [];
+    players.forEach(pid => {
+        let a = 0, m = 0;
+        daysInCurrentMonth.forEach(day => {
+            const f = formatDate(day);
+            const s = allAvailability[pid]?.[f];
+            if (s === 'available') a++; else if (s === 'maybe') m++;
+        });
+        usersTotals.push({ id: pid, available: a, maybe: m });
+    });
+    // fetch user names
+    const usersSnapshot = await getDocs(collection(db, 'users'));
+    const usersById: { [id: string]: string } = {};
+    usersSnapshot.forEach(d => usersById[d.id] = (d.data() as any).name);
+
+    html += '<h5>Disponibilidade por jogador (mês atual)</h5><ul>';
+    usersTotals.sort((x,y) => y.available - x.available || y.maybe - x.maybe).forEach(u => {
+        html += `<li><strong>${usersById[u.id] || u.id}</strong>: ${u.available} ✅, ${u.maybe} ❓</li>`;
+    });
+    html += '</ul>';
+
+    playerAvailabilityResult.innerHTML = html;
+}
+
 // --- Find Best Day Logic ---
 async function findBestDay() {
     if (!bestDayResult) return;
@@ -154,9 +346,9 @@ async function findBestDay() {
 
     let resultHTML = '<h4>Melhores Dias Sugeridos (Este Mês):</h4><ul>';
     sortedDays.slice(0, 15).forEach(date => { // Show top 5
-        const displayDate = formatDisplayDate(new Date(date));
+        const displayDate = formatDisplayDate(new Date(date+'T00:00:00'));
         const details = dayDetails[date];
-        resultHTML += `<li><strong>${date}</strong>: ${details.available} ✅, ${details.maybe} ❓, ${details.unavailable} ❌ (Score: ${dayScores[date]})</li>`;
+        resultHTML += `<li><strong>${displayDate}</strong>: ${details.available} ✅, ${details.maybe} ❓, ${details.unavailable} ❌ (Score: ${dayScores[date]})</li>`;
     });
     resultHTML += '</ul>';
     bestDayResult.innerHTML = resultHTML;
@@ -247,6 +439,9 @@ export function initializeGMView() {
     findBestDayButton.addEventListener('click', findBestDay);
     if (calcFromTodayButton) calcFromTodayButton.addEventListener('click', () => calculateAvailabilityByPlayer('today'));
     if (calcFromMonthButton) calcFromMonthButton.addEventListener('click', () => calculateAvailabilityByPlayer('month'));
+    if (createTableButton) createTableButton.addEventListener('click', createTable);
+    // load tables and users
+    loadTablesAndUsers();
 
     // Initial render
     renderGMView();
